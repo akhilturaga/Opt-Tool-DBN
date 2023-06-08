@@ -1,0 +1,82 @@
+import numpy as np
+import tensorflow as tf
+import csv
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score
+
+# Step 1: Open the CSV file containing the gene expression matrix and label data
+csv_file_path = 'C:\Users\16785\Downloads\scRNAseq_Benchmark_datasets\Inter-dataset\PbmcBench\Prior-knowledge-classifiers data\Marker_Genes_Classifiers_data.csv'
+csv_labels_path = 'C:\Users\16785\Downloads\scRNAseq_Benchmark_datasets\Inter-dataset\PbmcBench\Prior-knowledge-classifiers data\Marker_Genes_Classifiers_Labels.csv'
+
+# Read the CSV file using csv.reader
+with open(csv_file_path, 'r') as file:
+    csv_reader = csv.reader(file)
+    matrix = [row for row in csv_reader]
+    
+# Read the CSV file containing the labels using csv.reader
+with open(csv_labels_path, 'r') as file:
+    csv_reader = csv.reader(file)
+    labels = [row[0] for row in csv_reader]
+    
+# Step 2: Convert the matrix into an array using numpy
+array = np.array(matrix, dtype=np.float32)
+
+# Step 3: Sift over each row and feed into the DBN
+num_rows, num_columns = array.shape
+
+# Input Placeholder
+input_placeholder = tf.placeholder(tf.float32, shape=(None, num_columns))
+
+# DBN architecture
+num_hidden_units = [256, 128, 64]  # Number of units in each hidden layer
+activation_function = tf.nn.relu  # Activation function for hidden layers
+
+previous_layer = input_placeholder
+for i, num_units in enumerate(num_hidden_units):
+    # Create a fully connected layer with specified number of units and activation function
+    layer = tf.layers.Dense(units=num_units, activation=activation_function)(previous_layer)
+    previous_layer = layer
+
+# Output layer (assuming it's a classification task)
+output_layer = tf.layers.Dense(units=1, activation=tf.nn.sigmoid)(previous_layer)
+
+# TensorFlow session
+with tf.Session() as sess:
+    # Initialize variables
+    sess.run(tf.global_variables_initializer())
+
+    # List to store the outputs
+    outputs = []
+
+    # Iterate over each row and feed it into the DBN
+    for row_index in range(num_rows):
+        # Get a single row from the array
+        row = array[row_index, :]
+
+        # Reshape the row to match the input placeholder shape
+        row = row.reshape(1, -1)
+
+        # Feed the row into the DBN and get the output
+        row_output = sess.run(output_layer, feed_dict={input_placeholder: row})
+
+        # Store the output in the list
+        outputs.append(row_output)
+
+# Convert the outputs list to an array
+outputs_array = np.concatenate(outputs, axis=0)
+
+# Split the outputs and labels into training and testing sets
+outputs_train, outputs_test, labels_train, labels_test = train_test_split(
+    outputs_array, labels, test_size=0.5, random_state=42
+)
+
+# Train a Random Forest classifier
+classifier = RandomForestClassifier()
+classifier.fit(outputs_train, labels_train)
+
+# Predict labels for the testing set
+predicted_labels_test = classifier.predict(outputs_test)
+
+# Calculate the accuracy of the classifier
+accuracy = accuracy_score(labels_test, predicted_labels_test)
+print("Accuracy:", accuracy)
