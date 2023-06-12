@@ -8,27 +8,28 @@ from sklearn.ensemble import RandomForestClassifier
 # Step 1: Open the CSV file containing the gene expression matrix and label data
 csv_file_path = r'C:\Users\16785\Downloads\scRNAseq_Benchmark_datasets\Inter-dataset\PbmcBench\Prior-knowledge-classifiers data\Marker_Genes_Classifiers_data.csv'
 csv_labels_path = r'C:\Users\16785\Downloads\scRNAseq_Benchmark_datasets\Inter-dataset\PbmcBench\Prior-knowledge-classifiers data\Marker_Genes_Classifiers_Labels.csv'
+
 # Read the CSV file using csv.reader
 with open(csv_file_path, 'r') as file:
     csv_reader = csv.reader(file)
     matrix = [row for row in csv_reader]
-    
+
 # Read the CSV file containing the labels using csv.reader
 with open(csv_labels_path, 'r') as file:
     csv_reader = csv.reader(file)
     labels = [row[0] for row in csv_reader]
-    
+
 # Step 2: Convert the matrix into an array using numpy
 array = np.array(matrix, dtype=np.float32)
 
-# Step 3: Sift over each row and feed into the DBN
+# Step 3: Shift over each row and feed into the DBN
 num_rows, num_columns = array.shape
 
 # Input Placeholder
 input_placeholder = tf.placeholder(tf.float32, shape=(None, num_columns))
 
 # DBN architecture
-num_hidden_units = [256, 128, 64]  # Number of units in each hidden layer
+num_hidden_units = [256, 128, 64, 32, 16, 8, 4, 2]  # Number of units in each hidden layer
 activation_function = tf.nn.relu  # Activation function for hidden layers
 
 previous_layer = input_placeholder
@@ -53,11 +54,8 @@ with tf.Session() as sess:
         # Get a single row from the array
         row = array[row_index, :]
 
-        # Reshape the row to match the input placeholder shape
-        row = row.reshape(1, -1)
-
         # Feed the row into the DBN and get the output
-        row_output = sess.run(output_layer, feed_dict={input_placeholder: row})
+        row_output = sess.run(output_layer, feed_dict={input_placeholder: row.reshape(1, -1)})
 
         # Store the output in the list
         outputs.append(row_output)
@@ -69,8 +67,6 @@ outputs_array = np.concatenate(outputs, axis=0)
 outputs_train, outputs_test, labels_train, labels_test = train_test_split(
     outputs_array, labels, test_size=0.5, random_state=42
 )
-
-# Convert labels to numerical form if needed (e.g., using label encoding)
 
 # Train a Random Forest classifier
 classifier = RandomForestClassifier()
