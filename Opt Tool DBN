@@ -3,11 +3,11 @@ import tensorflow as tf
 import csv
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
+from sklearn.ensemble import RandomForestClassifier
 
 # Step 1: Open the CSV file containing the gene expression matrix and label data
-csv_file_path = 'C:\Users\16785\Downloads\scRNAseq_Benchmark_datasets\Inter-dataset\PbmcBench\Prior-knowledge-classifiers data\Marker_Genes_Classifiers_data.csv'
-csv_labels_path = 'C:\Users\16785\Downloads\scRNAseq_Benchmark_datasets\Inter-dataset\PbmcBench\Prior-knowledge-classifiers data\Marker_Genes_Classifiers_Labels.csv'
-
+csv_file_path = r'C:\Users\16785\Downloads\scRNAseq_Benchmark_datasets\Inter-dataset\PbmcBench\Prior-knowledge-classifiers data\Marker_Genes_Classifiers_data.csv'
+csv_labels_path = r'C:\Users\16785\Downloads\scRNAseq_Benchmark_datasets\Inter-dataset\PbmcBench\Prior-knowledge-classifiers data\Marker_Genes_Classifiers_Labels.csv'
 # Read the CSV file using csv.reader
 with open(csv_file_path, 'r') as file:
     csv_reader = csv.reader(file)
@@ -69,6 +69,8 @@ outputs_array = np.concatenate(outputs, axis=0)
 outputs_train, outputs_test, labels_train, labels_test = train_test_split(
     outputs_array, labels, test_size=0.5, random_state=42
 )
+
+# Convert labels to numerical form if needed (e.g., using label encoding)
 
 # Train a Random Forest classifier
 classifier = RandomForestClassifier()
