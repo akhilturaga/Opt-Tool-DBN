@@ -72,7 +72,7 @@ outputs_array = np.concatenate(outputs, axis=0)
 
 #Spliting the outputs and labels into training and testing sets
 outputs_train, outputs_test, labels_train, labels_test = train_test_split(
-    outputs_array, labels, test_size=0.5, random_state=42)
+    outputs_array, labels, test_size=0.7, random_state=42)
 
 #Training random forest classifier
 classifier = RandomForestClassifier()
