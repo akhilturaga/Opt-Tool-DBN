@@ -40,7 +40,7 @@ num_rows, num_columns = array.shape
 input_placeholder = tf.compat.v1.placeholder(tf.float32, shape=(None, num_columns))
 
 #DBN structuring
-num_hidden_units = [256, 128, 64, 32, 16, 8, 4, 2]  #Number of units in each hidden layer
+num_hidden_units = [256, 128, 64, 32, 16, 8]  #Number of units in each hidden layer
 activation_function = tf.nn.relu  #Activation function for hidden layers
 
 previous_layer = input_placeholder
