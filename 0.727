@@ -90,3 +90,8 @@ xgb_predictions = xgb.predict(rbm2.sample_hidden(rbm1.sample_hidden(X_test).nump
 xgb_accuracy = accuracy_score(Y_test, xgb_predictions)
 print(f"XGBoost Accuracy on test set: {xgb_accuracy:.3f}")
 
+from sklearn.metrics import classification_report
+
+classification_rep = classification_report(Y_test, xgb_predictions)
+print(classification_rep)
+
