@@ -1,0 +1,50 @@
+import numpy as np
+import pandas as pd
+from sklearn.preprocessing import LabelEncoder
+from sklearn.model_selection import train_test_split
+from sklearn.neural_network import BernoulliRBM
+from sklearn.pipeline import Pipeline
+from xgboost import XGBClassifier
+from sklearn.metrics import classification_report, confusion_matrix, accuracy_score, f1_score
+from time import time
+
+# Load data
+matrix_path = 'marrow_expression_matrix.csv'
+labels_path = 'marrow_labels.csv'
+sc_matrix = pd.read_csv(matrix_path, index_col=0)
+sc_array = sc_matrix.to_numpy()
+sc_labels = pd.read_csv(labels_path, index_col=0).iloc[:, 0]
+
+# Encode labels
+le = LabelEncoder()
+sc_labels_encoded = le.fit_transform(sc_labels)
+
+# Split data
+X_train, X_test, Y_train, Y_test = train_test_split(
+    sc_array, sc_labels_encoded, test_size=0.3, random_state=42, stratify=sc_labels_encoded
+)
+
+# Define and setup pipeline with modified RBM
+rbm = BernoulliRBM(random_state=0, n_components=256, learning_rate=0.001)  # Modify RBM hyperparameters
+xgb = XGBClassifier(
+    random_state=0,
+    scale_pos_weight=class_weights,
+    n_estimators=200,  # Use the best n_estimators found
+    max_depth=8,  # Use the best max_depth found
+    learning_rate=0.2,  # Use the best learning_rate found
+    min_child_weight=3,  # Use the best min_child_weight found
+    colsample_bytree=0.9890988281503088,  # Use the best colsample_bytree found
+)
+pipeline = Pipeline([("rbm", rbm), ("xgb", xgb)])
+
+# Fit the pipeline
+pipeline.fit(X_train, Y_train)
+
+# Evaluate on test set
+Y_pred = pipeline.predict(X_test)
+accuracy = accuracy_score(Y_test, Y_pred)
+f1 = f1_score(Y_test, Y_pred, average='macro')
+print(f"Accuracy on test set: {accuracy:.3f}")
+print(f"F1 Score: {f1:.3f}")
+print(classification_report(Y_test, Y_pred))
+print(confusion_matrix(Y_test, Y_pred))
