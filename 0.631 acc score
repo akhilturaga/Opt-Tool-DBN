@@ -1,0 +1,65 @@
+import numpy as np
+import pandas as pd
+from sklearn.preprocessing import LabelEncoder
+from sklearn.model_selection import train_test_split, RandomizedSearchCV
+from sklearn.neural_network import BernoulliRBM
+from sklearn.pipeline import Pipeline
+from xgboost import XGBClassifier
+from scipy.stats import uniform
+from sklearn.metrics import classification_report, confusion_matrix
+from time import time
+
+# Load data
+matrix_path = 'marrow_expression_matrix.csv'
+labels_path = 'marrow_labels.csv'
+sc_matrix = pd.read_csv(matrix_path, index_col=0)
+sc_array = sc_matrix.to_numpy()
+sc_labels = pd.read_csv(labels_path, index_col=0).iloc[:, 0]
+
+# Encode labels
+le = LabelEncoder()
+sc_labels_encoded = le.fit_transform(sc_labels)
+
+# Split data
+X_train, X_test, Y_train, Y_test = train_test_split(
+    sc_array, sc_labels_encoded, test_size=0.3, random_state=42, stratify=sc_labels_encoded
+)
+
+# Calculate class weights for XGBoost
+class_weights = len(Y_train) / (len(np.unique(Y_train)) * np.bincount(Y_train))
+
+# Define and setup pipeline
+rbm = BernoulliRBM(random_state=0)
+xgb = XGBClassifier(random_state=0, scale_pos_weight=class_weights)
+pipeline = Pipeline([("rbm", rbm), ("xgb", xgb)])
+
+# Hyperparameters grid
+param_grid = {
+    'rbm__learning_rate': [0.1, 0.01, 0.001],
+    'rbm__n_components': [256, 128, 64],
+    'xgb__n_estimators': [100, 150, 200],
+    'xgb__max_depth': [6, 8, 10],
+    'xgb__learning_rate': [0.05, 0.1, 0.2],
+    'xgb__min_child_weight': [1, 2, 3],
+    'xgb__colsample_bytree': uniform(0.7, 0.3),
+}
+
+# Randomized search
+random_search = RandomizedSearchCV(
+    estimator=pipeline, param_distributions=param_grid, n_iter=10, random_state=0, n_jobs=4, verbose=1
+)
+t0 = time()
+random_search.fit(X_train, Y_train)
+print(f"Done in {time() - t0:.3f}s")
+
+# Best parameters
+print("Best parameters combination found:")
+for param in sorted(param_grid.keys()):
+    print(f"{param}: {random_search.best_estimator_.get_params()[param]}")
+
+# Evaluate on test set
+Y_pred = random_search.predict(X_test)
+print(f"Accuracy on test set: {accuracy_score(Y_test, Y_pred):.3f}")
+print(f"F1 Score: {f1_score(Y_test, Y_pred, average='macro'):.3f}")
+print(classification_report(Y_test, Y_pred))
+print(confusion_matrix(Y_test, Y_pred))
