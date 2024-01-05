@@ -1,0 +1,111 @@
+import numpy as np
+import pandas as pd
+from sklearn.preprocessing import LabelEncoder
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score
+from sklearn.ensemble import GradientBoostingClassifier
+import tensorflow as tf
+from imblearn.over_sampling import SMOTE  
+from sklearn.metrics import classification_report
+
+# Load data
+matrix_path = 'marrow_expression_matrix.csv'
+labels_path = 'marrow_labels.csv'
+
+sc_matrix = pd.read_csv(matrix_path, index_col=0)
+sc_array = sc_matrix.to_numpy()
+sc_labels = pd.read_csv(labels_path, index_col=0).iloc[:, 0]
+
+# Encode labels
+le = LabelEncoder()
+sc_labels_encoded = le.fit_transform(sc_labels)
+
+# Split data
+X_train, X_test, Y_train, Y_test = train_test_split(
+    sc_array, sc_labels_encoded, test_size=0.3, random_state=42, stratify=sc_labels_encoded
+)
+
+# Convert Y_train to a Pandas Series to use value_counts()
+Y_train_series = pd.Series(Y_train)
+
+# Find the number of samples in the smallest class to adjust the k_neighbors for SMOTE
+smallest_class_count = Y_train_series.value_counts().min()
+k_neighbors_smote = max(smallest_class_count - 1, 1)  # Ensure k_neighbors is at least 1
+
+# Apply SMOTE to balance the dataset with the adjusted k_neighbors
+smote = SMOTE(k_neighbors=k_neighbors_smote)
+X_train_smote, Y_train_smote = smote.fit_resample(X_train, Y_train_series)
+
+# Gaussian-Bernoulli RBM and other definitions remain the same
+class GaussianBernoulliRBM:
+    def __init__(self, visible_units, hidden_units, learning_rate=0.01, batch_size=100, n_epochs=10, std_dev=0.1):
+        self.visible_units = visible_units
+        self.hidden_units = hidden_units
+        self.learning_rate = learning_rate
+        self.batch_size = batch_size
+        self.n_epochs = n_epochs
+        self.std_dev = std_dev  # Standard deviation for Gaussian visible units
+        self.weights = tf.Variable(tf.random.normal([visible_units, hidden_units], 0.01, dtype=tf.float32))
+        self.hidden_bias = tf.Variable(tf.zeros([hidden_units], dtype=tf.float32))
+        self.visible_bias = tf.Variable(tf.zeros([visible_units], dtype=tf.float32))
+
+    def sample_hidden(self, visible):
+        visible = tf.cast(visible, tf.float32)  # Ensure input is float32
+        hidden_logits = tf.matmul(visible, self.weights) + self.hidden_bias
+        return tf.nn.sigmoid(hidden_logits)
+
+    def sample_visible(self, hidden):
+        hidden = tf.cast(hidden, tf.float32)  # Ensure input is float32
+        visible_mean = tf.matmul(hidden, tf.transpose(self.weights)) + self.visible_bias
+        return tf.random.normal(tf.shape(visible_mean), mean=visible_mean, stddev=self.std_dev)
+
+    def train(self, X_train):
+        X_train = tf.cast(X_train, tf.float32)  # Cast input data to float32
+        for epoch in range(self.n_epochs):
+            for i in range(0, X_train.shape[0], self.batch_size):
+                x_batch = X_train[i:i+self.batch_size]
+                v0 = x_batch
+                
+                h0_prob = self.sample_hidden(v0)
+                h0_sample = tf.nn.relu(tf.sign(h0_prob - tf.random.uniform(tf.shape(h0_prob))))
+                
+                v1_prob = self.sample_visible(h0_sample)
+                h1_prob = self.sample_hidden(v1_prob)
+
+                positive_grad = tf.matmul(tf.transpose(v0), h0_prob)
+                negative_grad = tf.matmul(tf.transpose(v1_prob), h1_prob)
+
+                self.weights.assign_add(self.learning_rate * (positive_grad - negative_grad) / tf.cast(tf.shape(v0)[0], tf.float32))
+                self.visible_bias.assign_add(self.learning_rate * tf.reduce_mean(v0 - v1_prob, 0))
+                self.hidden_bias.assign_add(self.learning_rate * tf.reduce_mean(h0_prob - h1_prob, 0))
+
+# Stacking RBMs and training a classifier
+num_hidden_1 = 256
+num_hidden_2 = 128
+
+# Create and train RBMs on the SMOTE-balanced dataset
+rbm1 = GaussianBernoulliRBM(X_train_smote.shape[1], num_hidden_1)
+rbm2 = GaussianBernoulliRBM(num_hidden_1, num_hidden_2)
+
+rbm1.train(X_train_smote)
+rbm1_output = rbm1.sample_hidden(X_train_smote).numpy()
+
+rbm2.train(rbm1_output)
+rbm2_output = rbm2.sample_hidden(rbm1_output).numpy()
+
+# Train a classifier on the output of the last RBM
+xgb = GradientBoostingClassifier(n_estimators=200, max_depth=5, learning_rate=0.2, min_samples_split=3)
+xgb.fit(rbm2_output, Y_train_smote)
+
+# Evaluate the classifier
+# Note: You still use the original test set here, not SMOTE-applied
+rbm1_output_test = rbm1.sample_hidden(X_test).numpy()
+rbm2_output_test = rbm2.sample_hidden(rbm1_output_test).numpy()
+xgb_predictions = xgb.predict(rbm2_output_test)
+xgb_accuracy = accuracy_score(Y_test, xgb_predictions)
+print(f"XGBoost Accuracy on test set: {xgb_accuracy:.3f}")
+
+# Generate and print the classification report
+report = classification_report(Y_test, xgb_predictions)
+print("\nClassification Report:\n", report)
+
